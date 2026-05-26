@@ -33,7 +33,8 @@
 - PPTX import via `python-pptx` — converts text frames, pictures, and auto-shapes into editable blocks scaled to a 1920×1080 canvas
 - Screen pair-code generation (6-char alphanumeric) + public URL playback page with crossfade transitions, heartbeats every 30s
 - Open-meteo weather proxy (geocoding + current temp / wind / humidity)
-- Backend tested 24/24 pytest cases passing (auth, playlists, screens, pptx import, weather, owner isolation)
+- **Iteration 2 (2026-05-27)**: Asset library `/api/assets` (owner-scoped reusable images/videos), AssetLibrary dialog in editor with search + upload, drag-and-drop slide thumbnail reordering, live WebSocket push `/api/play/ws/{pair_code}` so TVs update without reload (with poll fallback).
+- Backend tested 35/35 pytest cases passing across both iterations.
 
 ## Bugs fixed during build
 - Clipboard `writeText` fallback in `Screens.jsx` (Cross-origin iframe denied — added try/catch + execCommand fallback)
