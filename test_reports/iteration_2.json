@@ -1,0 +1,44 @@
+{
+  "summary": "Iteration 2: Tested NEW features — Asset Library (/api/assets), WebSocket live-push (/api/play/ws/{pair_code}), frontend editor AssetLibrary dialog, and slide drag-reorder. Backend: 11/11 new tests PASS + 24/24 regression PASS = 35/35 (100%). Fixed 1 critical backend bug found during testing. Frontend: AssetLibrary dialog + upload flow VERIFIED working via Playwright; drag-reorder code wiring verified by review (Playwright cannot simulate HTML5 native DnD).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_screena_new_features.py",
+    "/app/backend/tests/test_screena_api.py",
+    "/app/test_reports/pytest/iter2_new.xml",
+    "/app/test_reports/pytest/iter2_regression.xml"
+  ],
+  "action_items": [
+    "Main agent: manually validate slide drag-reorder in a real browser (Playwright cannot synthesize HTML5 native DnD events — verified that the React state setter setDragSlideIdx() in onDragStart is bypassed by synthetic DragEvents, so synthetic tests are not meaningful). Code wiring in Editor.jsx looks correct: draggable, onDragStart→setDragSlideIdx, onDrop→moveSlide(). The save path (PUT /api/playlists) persisting reordered slides is already covered by regression test test_update_playlist_with_blocks."
+  ],
+  "bugs_fixed_during_testing": [
+    {
+      "file": "/app/backend/routes_assets.py",
+      "issue": "POST /api/assets returned 500 Internal Server Error. RCA: motor's insert_one() mutates the input doc to inject MongoDB '_id' (ObjectId). The handler returned `{k:v for k,v in doc.items()}` which therefore included the ObjectId. FastAPI's jsonable_encoder cannot serialize ObjectId → ValueError. Fix: exclude '_id' from the returned dict (`if k != '_id'`). After fix all 11 asset tests pass."
+    }
+  ],
+  "critical_code_review_comments": [
+    "routes_assets.py line ~58: Always strip MongoDB '_id' when returning insert_one() docs — same pattern should be audited across all POST handlers (other route files use insert_one inside try wrappers that don't always project _id out). Recommend: add a small helper `_strip_mongo_id(doc)` and apply universally.",
+    "routes_assets.py: 8MB cap is enforced AFTER reading the entire body into memory (`await file.read()`). For DoS hardening consider checking Content-Length first or streaming with a counter. Acceptable for MVP.",
+    "ws_manager.py / routes_screens.py WS: Public WS with no rate limit and no auth — pair_code is a 6-char alphanumeric ID. Acceptable for the player use case (pair_code is the shared secret), but consider lockout on rapid invalid pair_code attempts.",
+    "routes_playlists.py broadcast loop: When PUT /api/playlists/{id} runs, it scans all screens with that playlist_id and broadcasts to each pair_code — correct. Verified end-to-end with two simultaneous WS clients."
+  ],
+  "updated_files": [
+    "/app/backend/routes_assets.py (1-line bug fix: exclude '_id' from response)",
+    "/app/backend/tests/test_screena_new_features.py (NEW — 11 tests)"
+  ],
+  "success_rate": {"backend": "100% (35/35)", "frontend": "Asset library flow: PASS. Drag-reorder: not testable by Playwright (HTML5 native DnD limitation), code wiring reviewed and looks correct."},
+  "test_credentials": "admin@screena.app / admin123 (verified working)",
+  "seed_data_creation": "Tests create their own TEST_-prefixed playlists, screens, assets, and a transient user; all are cleaned up.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend POST /api/assets bug already fixed (ObjectId leak). WebSocket /api/play/ws/{code} is fully working end-to-end: initial sync on connect, broadcast on PUT /api/playlists/{id}, broadcast on PUT /api/screens/{id} reassigning playlist_id, and 4404 close on unknown pair_code. The AssetLibrary frontend dialog with [data-testid='asset-library-dialog'], [data-testid='asset-search'], [data-testid='asset-upload-button'], [data-testid='asset-upload-input'] are all wired and an upload auto-selects the new asset and closes the dialog. Drag-reorder of slide thumbnails CANNOT be functionally validated via Playwright — only via human/real-browser test. To run tests: `pytest /app/backend/tests/test_screena_new_features.py --asyncio-mode=auto -v` (requires `websockets` lib, already installed).",
+  "rca_of_the_issue": "POST /api/assets 500 RCA: PyMongo/motor's insert_one() side-effect mutates the input doc to add `_id: ObjectId(...)`. routes_assets.py:58 returned that mutated doc unchanged. FastAPI's response serializer (jsonable_encoder) cannot handle bson ObjectId → TypeError('ObjectId object is not iterable'). Mitigation applied: exclude '_id' key when constructing the response dict. Verified fix with 11 passing tests."
+}

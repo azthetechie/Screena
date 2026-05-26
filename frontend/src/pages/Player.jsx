@@ -102,12 +102,70 @@ export default function Player({ mode = "code" }) {
 
     useEffect(() => {
         load();
-        // refresh playlist every 30s on public player so new content rolls out
-        if (mode === "code") {
-            const t = setInterval(load, 30000);
-            return () => clearInterval(t);
-        }
-    }, [load, mode]);
+    }, [load]);
+
+    // Live updates via WebSocket on public player. Falls back to a 30s poll
+    // if the socket can't connect (e.g. browser blocks ws).
+    useEffect(() => {
+        if (mode !== "code" || !params.code) return;
+        const backend = process.env.REACT_APP_BACKEND_URL || window.location.origin;
+        const wsBase = backend.replace(/^http/i, "ws");
+        const url = `${wsBase}/api/play/ws/${params.code}`;
+        let ws;
+        let alive = true;
+        let pollTimer = null;
+        let pingTimer = null;
+        const startPoll = () => {
+            if (pollTimer) return;
+            pollTimer = setInterval(load, 30000);
+        };
+        const connect = () => {
+            try {
+                ws = new WebSocket(url);
+                ws.onopen = () => {
+                    if (pollTimer) {
+                        clearInterval(pollTimer);
+                        pollTimer = null;
+                    }
+                    // periodic keep-alive ping (any text)
+                    pingTimer = setInterval(() => {
+                        try { ws.send("ping"); } catch { /* noop */ }
+                    }, 25000);
+                };
+                ws.onmessage = (ev) => {
+                    try {
+                        const msg = JSON.parse(ev.data);
+                        if (msg.type === "playlist_updated") {
+                            if (!msg.playlist) {
+                                setError(`No playlist assigned to this screen yet.`);
+                            } else {
+                                setError(null);
+                                setPlaylist(msg.playlist);
+                                setIdx(0);
+                            }
+                        }
+                    } catch { /* noop */ }
+                };
+                ws.onerror = () => { /* swallow */ };
+                ws.onclose = () => {
+                    if (pingTimer) clearInterval(pingTimer);
+                    if (!alive) return;
+                    // try reconnect after 3s, plus enable polling fallback
+                    startPoll();
+                    setTimeout(() => alive && connect(), 3000);
+                };
+            } catch {
+                startPoll();
+            }
+        };
+        connect();
+        return () => {
+            alive = false;
+            if (ws) try { ws.close(); } catch { /* noop */ }
+            if (pollTimer) clearInterval(pollTimer);
+            if (pingTimer) clearInterval(pingTimer);
+        };
+    }, [mode, params.code, load]);
 
     // Advance slides
     useEffect(() => {

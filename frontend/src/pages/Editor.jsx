@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { Rnd } from "react-rnd";
 import api from "@/lib/api";
 import BlockRenderer from "@/components/BlockRenderer";
+import AssetLibrary from "@/components/AssetLibrary";
 import {
     Type,
     Image as ImageIcon,
@@ -100,6 +101,12 @@ export default function Editor() {
     const [dirty, setDirty] = useState(false);
     const [scale, setScale] = useState(0.4);
     const canvasWrapRef = useRef(null);
+    // Asset library state
+    const [libraryOpen, setLibraryOpen] = useState(false);
+    const [libraryTarget, setLibraryTarget] = useState(null); // {blockId, kind}
+    // Slide drag-reorder state
+    const [dragSlideIdx, setDragSlideIdx] = useState(null);
+    const [dragOverIdx, setDragOverIdx] = useState(null);
 
     useEffect(() => {
         (async () => {
@@ -224,28 +231,40 @@ export default function Editor() {
         }
     };
 
-    // ----- Asset upload for image/video block -----
-    const uploadAsset = (blockId, accept) =>
-        new Promise((resolve) => {
-            const input = document.createElement("input");
-            input.type = "file";
-            input.accept = accept;
-            input.onchange = () => {
-                const f = input.files?.[0];
-                if (!f) return resolve();
-                if (f.size > 8 * 1024 * 1024) {
-                    toast.error("File too large (max 8MB)");
-                    return resolve();
-                }
-                const reader = new FileReader();
-                reader.onload = () => {
-                    updateBlock(blockId, { src: reader.result });
-                    resolve();
-                };
-                reader.readAsDataURL(f);
-            };
-            input.click();
+    // ----- Asset library opener -----
+    // The Inspector calls this with the selected block; we just remember the
+    // target then open the library modal which handles upload + selection.
+    const openAssetLibrary = (blockId, kind) => {
+        setLibraryTarget({ blockId, kind });
+        setLibraryOpen(true);
+    };
+
+    const onAssetPicked = (asset) => {
+        if (libraryTarget && asset?.data) {
+            updateBlock(libraryTarget.blockId, { src: asset.data });
+        }
+        setLibraryOpen(false);
+        setLibraryTarget(null);
+    };
+
+    // ----- Slide thumbnail drag-reorder -----
+    const moveSlide = (from, to) => {
+        if (from === to || from < 0 || to < 0) return;
+        setPlaylist((p) => {
+            const slides = [...p.slides];
+            const [m] = slides.splice(from, 1);
+            slides.splice(to, 0, m);
+            return { ...p, slides };
         });
+        // adjust active idx
+        setActiveSlideIdx((cur) => {
+            if (cur === from) return to;
+            if (from < cur && to >= cur) return cur - 1;
+            if (from > cur && to <= cur) return cur + 1;
+            return cur;
+        });
+        setDirty(true);
+    };
 
     const sortedBlocks = useMemo(() => [...blocks].sort((a, b) => (a.z || 0) - (b.z || 0)), [blocks]);
 
@@ -314,10 +333,16 @@ export default function Editor() {
                             <div
                                 key={s.id}
                                 data-testid={`slide-thumb-${i}`}
+                                draggable
                                 onClick={() => { setActiveSlideIdx(i); setSelectedBlockId(null); }}
+                                onDragStart={(e) => { setDragSlideIdx(i); e.dataTransfer.effectAllowed = "move"; }}
+                                onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDragOverIdx(i); }}
+                                onDragLeave={() => setDragOverIdx((cur) => (cur === i ? null : cur))}
+                                onDrop={(e) => { e.preventDefault(); if (dragSlideIdx !== null) moveSlide(dragSlideIdx, i); setDragSlideIdx(null); setDragOverIdx(null); }}
+                                onDragEnd={() => { setDragSlideIdx(null); setDragOverIdx(null); }}
                                 className={`group cursor-pointer rounded-md border transition-all ${
                                     i === activeSlideIdx ? "border-[#3b82f6] bg-[#3b82f6]/10" : "border-soft hover:border-strong"
-                                }`}
+                                } ${dragOverIdx === i && dragSlideIdx !== i ? "ring-2 ring-[#3b82f6]" : ""} ${dragSlideIdx === i ? "opacity-50" : ""}`}
                             >
                                 <div className="flex items-center gap-2 px-2 py-1.5">
                                     <span className="label-mono w-5">{String(i + 1).padStart(2, "0")}</span>
@@ -459,11 +484,18 @@ export default function Editor() {
                             onDuplicate={() => duplicateBlock(selectedBlock.id)}
                             onMoveUp={() => reorderZ(selectedBlock.id, "up")}
                             onMoveDown={() => reorderZ(selectedBlock.id, "down")}
-                            onUpload={() => uploadAsset(selectedBlock.id, selectedBlock.type === "video" ? "video/*" : "image/*")}
+                            onUpload={() => openAssetLibrary(selectedBlock.id, selectedBlock.type === "video" ? "video" : "image")}
                         />
                     )}
                 </aside>
             </div>
+
+            <AssetLibrary
+                open={libraryOpen}
+                filter={libraryTarget?.kind || null}
+                onClose={() => { setLibraryOpen(false); setLibraryTarget(null); }}
+                onSelect={onAssetPicked}
+            />
         </div>
     );
 }
@@ -616,7 +648,7 @@ function BlockInspector({ block, updateBlock, onDelete, onDuplicate, onMoveUp, o
             {(block.type === "image" || block.type === "video") && (
                 <Section title={block.type === "image" ? "Image" : "Video"}>
                     <button className="btn-ghost w-full inline-flex items-center justify-center gap-2" onClick={onUpload} data-testid="block-upload-asset">
-                        <Pencil size={13} /> {block.src ? "Replace" : "Upload"} {block.type}
+                        <Pencil size={13} /> {block.src ? "Replace" : "Pick"} from library
                     </button>
                     <Field label="Fit">
                         <select className="input-field" value={block.objectFit || "cover"} onChange={(e) => updateBlock({ objectFit: e.target.value })} data-testid="block-object-fit">

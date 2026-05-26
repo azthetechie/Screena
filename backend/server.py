@@ -14,6 +14,7 @@ from routes_playlists import router as playlists_router
 from routes_screens import router as screens_router, public_router as play_router
 from routes_pptx import router as pptx_router
 from routes_weather import router as weather_router
+from routes_assets import router as assets_router
 
 app = FastAPI(title="Screena - Digital Signage CMS")
 
@@ -24,6 +25,7 @@ app.include_router(screens_router)
 app.include_router(play_router)
 app.include_router(pptx_router)
 app.include_router(weather_router)
+app.include_router(assets_router)
 
 
 @app.get("/api/health")

@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from db import db
 from auth import get_current_user
 from models import Playlist, Slide, PlaylistUpdate
+from ws_manager import manager
 
 router = APIRouter(prefix="/api/playlists", tags=["playlists"])
 
@@ -61,6 +62,12 @@ async def update_playlist(playlist_id: str, payload: PlaylistUpdate, user: dict 
     update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
     await db.playlists.update_one({"id": playlist_id}, {"$set": update_data})
     new_doc = await db.playlists.find_one({"id": playlist_id}, {"_id": 0})
+    # Broadcast to any live screens currently playing this playlist
+    screens = await db.screens.find({"playlist_id": playlist_id}, {"_id": 0, "pair_code": 1}).to_list(200)
+    for s in screens:
+        code = s.get("pair_code")
+        if code:
+            await manager.broadcast(code, {"type": "playlist_updated", "playlist": new_doc})
     return new_doc
 
 

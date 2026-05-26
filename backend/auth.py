@@ -211,4 +211,6 @@ async def ensure_indexes():
     await db.playlists.create_index("id", unique=True)
     await db.screens.create_index("pair_code", unique=True)
     await db.screens.create_index("owner_id")
+    await db.assets.create_index("owner_id")
+    await db.assets.create_index("id", unique=True)
     await db.login_attempts.create_index("identifier")

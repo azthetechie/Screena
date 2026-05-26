@@ -1,11 +1,12 @@
 import random
 import string
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 from db import db
 from auth import get_current_user
 from models import Screen, ScreenUpdate
+from ws_manager import manager
 
 router = APIRouter(prefix="/api/screens", tags=["screens"])
 public_router = APIRouter(prefix="/api/play", tags=["play"])
@@ -46,6 +47,12 @@ async def update_screen(screen_id: str, payload: ScreenUpdate, user: dict = Depe
     if update_data:
         await db.screens.update_one({"id": screen_id}, {"$set": update_data})
     new_doc = await db.screens.find_one({"id": screen_id}, {"_id": 0})
+    # If playlist changed, push fresh playlist payload to the live screen
+    if "playlist_id" in update_data:
+        playlist = None
+        if new_doc.get("playlist_id"):
+            playlist = await db.playlists.find_one({"id": new_doc["playlist_id"]}, {"_id": 0})
+        await manager.broadcast(new_doc["pair_code"], {"type": "playlist_updated", "playlist": playlist})
     return new_doc
 
 
@@ -76,3 +83,28 @@ async def fetch_play(pair_code: str):
         "screen": {"id": screen["id"], "name": screen["name"], "pair_code": screen["pair_code"]},
         "playlist": playlist,
     }
+
+
+
+# --- Public live WebSocket for instant edit push (NO AUTH) ---
+@public_router.websocket("/ws/{pair_code}")
+async def play_ws(websocket: WebSocket, pair_code: str):
+    code = pair_code.upper().strip()
+    screen = await db.screens.find_one({"pair_code": code}, {"_id": 0})
+    if not screen:
+        await websocket.close(code=4404)
+        return
+    await manager.connect(code, websocket)
+    try:
+        # Send initial sync payload so the player has the latest playlist
+        playlist = None
+        if screen.get("playlist_id"):
+            playlist = await db.playlists.find_one({"id": screen["playlist_id"]}, {"_id": 0})
+        await websocket.send_json({"type": "playlist_updated", "playlist": playlist})
+        while True:
+            # Keep socket alive; ignore any inbound text (used as keep-alive ping)
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(code, websocket)
+    except Exception:
+        manager.disconnect(code, websocket)
