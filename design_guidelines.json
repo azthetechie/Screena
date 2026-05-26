@@ -1,0 +1,153 @@
+{
+  "project_name": "Screena - Digital Signage & Advertising CMS",
+  "theme": "dark",
+  "archetype": "4 (Swiss & High-Contrast)",
+  "rationale": "As a pro-tier creative editor and digital signage CMS, the UI must get out of the way of the bright, colorful advertising content. The 'Swiss & High-Contrast' archetype in a dark theme provides a precise, technical, and highly legible environment, heavily inspired by top-tier creative tools like Figma and Linear. We tint our grays with a cold blue for a 'technical/studio' feel.",
+  
+  "typography": {
+    "anti_default_rule": "Inter is strictly forbidden for headings. Space Grotesk is forbidden for dashboards.",
+    "fonts": [
+      {
+        "family": "Manrope",
+        "purpose": "Headings & Primary Navigation",
+        "import_url": "https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap"
+      },
+      {
+        "family": "IBM Plex Sans",
+        "purpose": "Body text & UI Controls",
+        "import_url": "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      },
+      {
+        "family": "IBM Plex Mono",
+        "purpose": "Technical labels, Rulers, Coordinates (X/Y), Z-index",
+        "import_url": "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap"
+      }
+    ],
+    "scale": {
+      "h1": "text-4xl sm:text-5xl font-extrabold tracking-tighter leading-none",
+      "h2": "text-2xl sm:text-3xl font-bold tracking-tight",
+      "h3": "text-xl sm:text-2xl font-semibold tracking-tight",
+      "h4": "text-lg sm:text-xl font-medium",
+      "body": "text-sm sm:text-base leading-relaxed",
+      "labels": "text-xs font-mono tracking-[0.2em] uppercase",
+      "editor_coordinates": "text-[10px] font-mono text-muted-foreground"
+    }
+  },
+
+  "colors": {
+    "background": {
+      "base": "#0B0D12",
+      "description": "Deep obsidian blue-tinted black for the main application background. Not pure black."
+    },
+    "surface": {
+      "panel": "#141720",
+      "card": "#1A1D27",
+      "canvas_bg": "#07080A",
+      "description": "Panels (left/right sidebars) use #141720. The actual editable canvas background area uses a darker #07080A with a subtle dot grid to make the white ad slides pop."
+    },
+    "border": {
+      "default": "rgba(255, 255, 255, 0.08)",
+      "focus": "rgba(255, 255, 255, 0.2)",
+      "active": "#3B82F6"
+    },
+    "text": {
+      "primary": "#FFFFFF",
+      "secondary": "#A1A1AA",
+      "muted": "#71717A"
+    },
+    "accent": {
+      "primary": "#3B82F6",
+      "primary_hover": "#60A5FA",
+      "warning": "#FBBF24",
+      "danger": "#EF4444",
+      "success": "#10B981",
+      "selection_box": "rgba(59, 130, 246, 0.2)"
+    }
+  },
+
+  "layout": {
+    "spacing_philosophy": "Technical density for the editor, generous spacing for the dashboard.",
+    "dashboard_grid": "Bento Grid protocol: 'Control Room' grid layout. grid-cols-1 md:grid-cols-3 lg:grid-cols-4 with gap-6.",
+    "editor_layout": {
+      "top_bar": "h-14 border-b border-white/10 flex items-center justify-between px-4 bg-panel",
+      "left_sidebar": "w-64 border-r border-white/10 flex flex-col bg-panel h-[calc(100vh-3.5rem)]",
+      "right_inspector": "w-72 border-l border-white/10 flex flex-col bg-panel h-[calc(100vh-3.5rem)]",
+      "canvas_area": "flex-1 bg-canvas_bg relative overflow-hidden flex items-center justify-center cursor-crosshair"
+    }
+  },
+
+  "surfaces_and_micro_themes": {
+    "panels": "The 'Grid Borders' (Technical Look). Expose the skeleton. Heavy use of 1px solid borders border-white/10 to separate panels. No massive drop shadows. Flat, precise.",
+    "canvas": "Should feature a repeating CSS radial-gradient or SVG pattern dot-grid to signify it's a workspace.",
+    "buttons": "Neumorphic minimal: Flat background matching parent, 1px border border-white/10, text-primary. Hover states must explicitly lighten background and maintain border contrast.",
+    "canvas_blocks": "When a block (text, image, shape) is selected on the canvas, it MUST have a 2px solid #3B82F6 border and corner resize handles (small white squares with blue borders)."
+  },
+
+  "components": {
+    "strategy": "Use pure HTML + Tailwind for macro layouts. Use heavily customized Shadcn for forms, modals, dropdowns, and tabs. Avoid Shadcn Cards for the editor layout; use semantic divs with explicit borders.",
+    "icons": {
+      "library": "@phosphor-icons/react",
+      "rationale": "Phosphor Icons offer the precise, technical 'duotone' or 'regular' weights needed for a pro-tier tool like this.",
+      "installation": "yarn add @phosphor-icons/react"
+    },
+    "slide_designer": {
+      "layers_panel": "Left sidebar bottom half. Drag-and-drop list of layers. Use a compact list item with icon (Text/Image/Video) + Layer Name. Highlight active layer in blue.",
+      "thumbnails_panel": "Left sidebar top half. Slide deck view. Numbered thumbnails of slides in the current playlist.",
+      "toolbar": "Top center of the top bar. Toggle buttons for: Selection Arrow, Text, Image, Shape, Widget (Clock/Weather/Countdown).",
+      "properties_inspector": "Right sidebar. Accordion or Sectioned layout. Sections: Position & Size (X, Y, W, H with text/number inputs), Appearance (Color, Opacity), Typography (if text block), and Data (if Widget).",
+      "canvas_block": "Absolute positioned div within a relative slide container. Must support inline dragging and resizing. Z-index maps to the layers panel."
+    },
+    "public_player": {
+      "layout": "100vw 100vh, absolute edge-to-edge. OVERRIDE all dashboard styles. No scrollbars. No menus. Pure rendering of the active slide. Smooth crossfade or slide transitions between screens."
+    },
+    "dashboard_bento": {
+      "cards": "Square or tall rectangles. Use pure borders. Top left: Active Screens (Stats). Top right: Recent Playlists (List). Bottom: Quick Actions."
+    }
+  },
+
+  "interactions": {
+    "hover_states": "All buttons must explicitly define hover:text-white and hover:bg-white/5.",
+    "focus_states": "focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent.",
+    "drag_and_drop": "Use visual indicators (blue drop-lines) when reordering slides or layers.",
+    "testing": "All interactive elements MUST have data-testid attributes (e.g., data-testid='add-text-block-btn', data-testid='layer-item-3')."
+  },
+
+  "media_and_assets": {
+    "login_hero_background": {
+      "url": "https://static.prod-images.emergentagent.com/jobs/f6ec4d38-c3c1-4669-832f-f7ae93c81b81/images/02c3116c825c3f81463ed4815254cea5afb696b63355cc9907759762a89e0353.png",
+      "description": "Abstract ultra-minimalist dark geometric texture with subtle white grid lines. Use as the right-side split screen image on the Login/Register page.",
+      "category": "backgrounds"
+    },
+    "sample_assets": [
+      {
+        "url": "https://images.unsplash.com/photo-1600185365483-26d7a4cc7519?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODR8MHwxfHNlYXJjaHwyfHxzbmVha2VyJTIwcHJvZHVjdCUyMHNob3R8ZW58MHx8fHwxNzc5ODM2NTcxfDA&ixlib=rb-4.1.0&q=85",
+        "description": "White and red Nike athletic shoe. Use as a sample image block in the default/demo slide.",
+        "category": "asset_library"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1572231086568-6984943e6629?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Nzd8MHwxfHNlYXJjaHwyfHxtb2Rlcm4lMjBjb2ZmZWUlMjBzaG9wfGVufDB8fHx8MTc3OTgzNjU3MHww&ixlib=rb-4.1.0&q=85",
+        "description": "Modern coffee shop wall. Use as a sample background image block for a cafe advertising slide demo.",
+        "category": "asset_library"
+      },
+      {
+        "url": "https://images.pexels.com/photos/30234396/pexels-photo-30234396.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Cozy modern coffee shop interior. Use as an alternative demo background.",
+        "category": "asset_library"
+      }
+    ]
+  },
+
+  "instructions_to_main_agent": [
+    "Phase 1: Setup the layout shells. Build the Dashboard shell (top nav + bento grid) and the Editor shell (left panel, top bar, right panel, canvas center).",
+    "Phase 2: Implement the Slide Designer canvas. Ensure the main slide area is a fixed aspect ratio (e.g. 1920x1080) scaled down via CSS transform or aspect-ratio to fit the center canvas view.",
+    "Phase 3: Implement draggable blocks (Text, Image, Video, Shape). Use a library like react-rnd or framer-motion for drag/resize capabilities, mapping to X, Y, W, H properties.",
+    "Phase 4: Build the Left Sidebar. The top half should list 'Slides' in the playlist. The bottom half should map the 'Layers' (z-index) of the currently active slide. Tie the z-index to array ordering.",
+    "Phase 5: Build the Right Inspector. It must react to the currently selected block, updating state for dimensions, text content, and colors.",
+    "Phase 6: PPTX Import - implement a mock or basic parsing function if full parsing requires a heavy backend, but provide the UI to upload and 'convert' it into canvas blocks.",
+    "Phase 7: Public TV display. Create a separate route (e.g., /play/:screenId) that fetches the active playlist and cycles through slides in full screen using simple CSS transitions. Hide all UI here.",
+    "Phase 8: Ensure JWT auth protects the dashboard and editor routes.",
+    "CRITICAL: Adhere to the spacing and layout strategy. Do not use generic Shadcn cards for the editor UI. Use pure semantic HTML divs with explicit borders (border-white/10).",
+    "CRITICAL: Do not use Inter for headings. Use Manrope for headings and IBM Plex Sans for body.",
+    "CRITICAL: Ensure every interactive element has a data-testid attribute."
+  ]
+}
