@@ -39,10 +39,32 @@ export default function Screens() {
         toast.success("Screen updated");
     };
 
-    const copyLink = (code) => {
+    const copyLink = async (code) => {
         const url = `${window.location.origin}/play/${code}`;
-        navigator.clipboard.writeText(url);
-        toast.success("Public URL copied");
+        try {
+            if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(url);
+                toast.success("Public URL copied");
+                return;
+            }
+            throw new Error("clipboard-unavailable");
+        } catch {
+            // Fallback: temporary textarea + execCommand
+            try {
+                const ta = document.createElement("textarea");
+                ta.value = url;
+                ta.style.position = "fixed";
+                ta.style.opacity = "0";
+                document.body.appendChild(ta);
+                ta.focus();
+                ta.select();
+                document.execCommand("copy");
+                document.body.removeChild(ta);
+                toast.success("Public URL copied");
+            } catch {
+                toast.error("Couldn't copy — please copy manually");
+            }
+        }
     };
 
     return (
