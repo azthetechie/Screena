@@ -44,6 +44,18 @@ docker compose -f docker-compose.https.yml up --build -d
 
 Caddy will fetch the TLS cert on first boot (~30 s) and renew it automatically thereafter. The studio is then at `https://<your-domain>`.
 
+### Option 1c — Pre-built images from GHCR (low-RAM hosts, ARM, fast boots)
+
+If you push tags via the included [`release.yml`](./.github/workflows/release.yml) GitHub Action, images appear at `ghcr.io/<owner>/screena-backend` and `ghcr.io/<owner>/screena-frontend` (multi-arch: `linux/amd64` + `linux/arm64`). Then:
+
+```bash
+# .env: set OWNER=<your-github-username>, SCREENA_VERSION=v1.2.3 (or latest)
+docker compose -f docker-compose.prod.yml pull
+docker compose -f docker-compose.prod.yml up -d
+```
+
+No local Docker build needed — perfect for a Raspberry Pi 4 running the studio.
+
 ### Option 2 — `setup.sh` (no Docker)
 
 You need Python 3.11+, Node 18+, Yarn, and a running MongoDB on `localhost:27017`.
@@ -66,6 +78,14 @@ curl -fsSL https://raw.githubusercontent.com/<your-org>/screena/main/scripts/ins
 ```
 
 That installs `chromium-browser`, writes an autostart entry, disables screen blanking, and hides the mouse cursor. Reboot and the Pi boots straight into the player.
+
+Need to **point an existing Pi at a different screen URL**? Skip the package install — just update the URL:
+
+```bash
+./install-pi.sh --update https://signage.example.com/play/Z9Y8X7
+```
+
+The script rewrites the autostart entry and relaunches Chromium with the new URL immediately (no reboot needed).
 
 ## API
 
