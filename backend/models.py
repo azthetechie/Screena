@@ -20,6 +20,7 @@ class Block(BaseModel):
     height: float = 100
     rotation: float = 0
     z: int = 0
+    groupId: Optional[str] = None  # blocks sharing groupId move together
     # type-specific data
     text: Optional[str] = None
     fontSize: Optional[float] = 32

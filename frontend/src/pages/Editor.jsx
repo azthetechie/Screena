@@ -97,7 +97,9 @@ export default function Editor() {
     const navigate = useNavigate();
     const [playlist, setPlaylist] = useState(null);
     const [activeSlideIdx, setActiveSlideIdx] = useState(0);
-    const [selectedBlockId, setSelectedBlockId] = useState(null);
+    // selectedIds is the source of truth for selection (single or multi/group)
+    const [selectedIds, setSelectedIds] = useState([]);
+    const selectedBlockId = selectedIds.length === 1 ? selectedIds[0] : null;
     const [saving, setSaving] = useState(false);
     const [dirty, setDirty] = useState(false);
     const [scale, setScale] = useState(0.4);
@@ -108,6 +110,8 @@ export default function Editor() {
     // Slide drag-reorder state
     const [dragSlideIdx, setDragSlideIdx] = useState(null);
     const [dragOverIdx, setDragOverIdx] = useState(null);
+    // Group drag tracking (for translating a multi-selection together)
+    const groupDragRef = useRef(null); // {startX, startY, snapshot:[{id,x,y}]}
 
     useEffect(() => {
         (async () => {
@@ -124,6 +128,47 @@ export default function Editor() {
     const slide = playlist?.slides?.[activeSlideIdx];
     const blocks = slide?.blocks || [];
     const selectedBlock = blocks.find((b) => b.id === selectedBlockId) || null;
+    const selectedBlocks = useMemo(
+        () => blocks.filter((b) => selectedIds.includes(b.id)),
+        [blocks, selectedIds]
+    );
+    // Group bounding box (only meaningful when 2+ blocks selected)
+    const groupBounds = useMemo(() => {
+        if (selectedBlocks.length < 2) return null;
+        const minX = Math.min(...selectedBlocks.map((b) => b.x));
+        const minY = Math.min(...selectedBlocks.map((b) => b.y));
+        const maxX = Math.max(...selectedBlocks.map((b) => b.x + b.width));
+        const maxY = Math.max(...selectedBlocks.map((b) => b.y + b.height));
+        return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+    }, [selectedBlocks]);
+    // Are all selected blocks part of the same group?
+    const sharedGroupId = useMemo(() => {
+        if (selectedBlocks.length < 2) return null;
+        const g = selectedBlocks[0].groupId;
+        if (!g) return null;
+        return selectedBlocks.every((b) => b.groupId === g) ? g : null;
+    }, [selectedBlocks]);
+
+    // Centralised selection handler — expands by group when needed.
+    const selectBlock = useCallback(
+        (blockId, shiftKey = false) => {
+            const block = blocks.find((b) => b.id === blockId);
+            if (!block) return;
+            if (shiftKey) {
+                setSelectedIds((cur) => (cur.includes(blockId) ? cur.filter((x) => x !== blockId) : [...cur, blockId]));
+                return;
+            }
+            if (block.groupId) {
+                const ids = blocks.filter((b) => b.groupId === block.groupId).map((b) => b.id);
+                setSelectedIds(ids);
+            } else {
+                setSelectedIds([blockId]);
+            }
+        },
+        [blocks]
+    );
+
+    const clearSelection = useCallback(() => setSelectedIds([]), []);
 
     // Auto-scale canvas to fit available area
     useEffect(() => {
@@ -141,6 +186,29 @@ export default function Editor() {
         window.addEventListener("resize", compute);
         return () => window.removeEventListener("resize", compute);
     }, [playlist]);
+
+    // Keyboard shortcuts: Cmd/Ctrl+G group, Cmd/Ctrl+Shift+G ungroup, Esc clear
+    useEffect(() => {
+        const onKey = (e) => {
+            const tag = (e.target?.tagName || "").toLowerCase();
+            const editable = tag === "input" || tag === "textarea" || e.target?.isContentEditable;
+            if (editable) return;
+            const meta = e.metaKey || e.ctrlKey;
+            if (meta && (e.key === "g" || e.key === "G")) {
+                e.preventDefault();
+                if (e.shiftKey) ungroupSelection();
+                else groupSelection();
+            } else if (e.key === "Escape") {
+                clearSelection();
+            } else if ((e.key === "Backspace" || e.key === "Delete") && selectedIds.length) {
+                e.preventDefault();
+                deleteSelection();
+            }
+        };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedIds, sharedGroupId, groupBounds]);
 
     // ----- Slide ops -----
     const updateSlide = useCallback(
@@ -167,12 +235,18 @@ export default function Editor() {
         const b = newBlock(type);
         b.z = (blocks.reduce((m, x) => Math.max(m, x.z || 0), 0) || 0) + 1;
         updateSlide(activeSlideIdx, (s) => ({ blocks: [...s.blocks, b] }));
-        setSelectedBlockId(b.id);
+        setSelectedIds([b.id]);
     };
 
     const deleteBlock = (blockId) => {
         updateSlide(activeSlideIdx, (s) => ({ blocks: s.blocks.filter((b) => b.id !== blockId) }));
-        if (selectedBlockId === blockId) setSelectedBlockId(null);
+        setSelectedIds((cur) => cur.filter((id) => id !== blockId));
+    };
+
+    const deleteSelection = () => {
+        if (!selectedIds.length) return;
+        updateSlide(activeSlideIdx, (s) => ({ blocks: s.blocks.filter((b) => !selectedIds.includes(b.id)) }));
+        setSelectedIds([]);
     };
 
     const duplicateBlock = (blockId) => {
@@ -180,7 +254,44 @@ export default function Editor() {
         if (!b) return;
         const copy = { ...b, id: crypto.randomUUID(), x: b.x + 30, y: b.y + 30, z: (blocks.reduce((m, x) => Math.max(m, x.z || 0), 0) || 0) + 1 };
         updateSlide(activeSlideIdx, (s) => ({ blocks: [...s.blocks, copy] }));
-        setSelectedBlockId(copy.id);
+        setSelectedIds([copy.id]);
+    };
+
+    // ----- Grouping -----
+    const groupSelection = () => {
+        if (selectedIds.length < 2) return;
+        const gid = crypto.randomUUID();
+        updateSlide(activeSlideIdx, (s) => ({
+            blocks: s.blocks.map((b) => (selectedIds.includes(b.id) ? { ...b, groupId: gid } : b)),
+        }));
+        toast.success(`Grouped ${selectedIds.length} blocks`);
+    };
+
+    const ungroupSelection = () => {
+        if (!sharedGroupId) return;
+        updateSlide(activeSlideIdx, (s) => ({
+            blocks: s.blocks.map((b) => (b.groupId === sharedGroupId ? { ...b, groupId: null } : b)),
+        }));
+        toast.success("Ungrouped");
+    };
+
+    // ----- Group drag (translate every selected block by the same delta) -----
+    const beginGroupDrag = () => {
+        groupDragRef.current = {
+            snapshot: selectedBlocks.map((b) => ({ id: b.id, x: b.x, y: b.y })),
+        };
+    };
+    const onGroupDrag = (_e, d) => {
+        const ref = groupDragRef.current;
+        if (!ref || !groupBounds) return;
+        const dx = d.x - groupBounds.x;
+        const dy = d.y - groupBounds.y;
+        updateSlide(activeSlideIdx, (s) => ({
+            blocks: s.blocks.map((b) => {
+                const snap = ref.snapshot.find((x) => x.id === b.id);
+                return snap ? { ...b, x: Math.round(snap.x + dx), y: Math.round(snap.y + dy) } : b;
+            }),
+        }));
     };
 
     const reorderZ = (blockId, dir) => {
@@ -335,7 +446,7 @@ export default function Editor() {
                                 key={s.id}
                                 data-testid={`slide-thumb-${i}`}
                                 draggable
-                                onClick={() => { setActiveSlideIdx(i); setSelectedBlockId(null); }}
+                                onClick={() => { setActiveSlideIdx(i); clearSelection(); }}
                                 onDragStart={(e) => { setDragSlideIdx(i); e.dataTransfer.effectAllowed = "move"; }}
                                 onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDragOverIdx(i); }}
                                 onDragLeave={() => setDragOverIdx((cur) => (cur === i ? null : cur))}
@@ -378,12 +489,12 @@ export default function Editor() {
                         {sortedBlocks.length === 0 && <div className="text-xs text-muted2 px-2 py-3">No layers · use the toolbar to add a block</div>}
                         {[...sortedBlocks].reverse().map((b) => {
                             const Icon = BLOCK_ICON[b.type] || Square;
-                            const active = b.id === selectedBlockId;
+                            const active = selectedIds.includes(b.id);
                             return (
                                 <div
                                     key={b.id}
                                     data-testid={`layer-item-${b.id}`}
-                                    onClick={() => setSelectedBlockId(b.id)}
+                                    onClick={(e) => selectBlock(b.id, e.shiftKey)}
                                     className={`flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer border transition ${
                                         active ? "bg-[#3b82f6]/15 border-[#3b82f6]/40 text-white" : "border-transparent hover:bg-white/5 text-secondary2"
                                     }`}
@@ -392,6 +503,9 @@ export default function Editor() {
                                     <span className="text-xs flex-1 truncate">
                                         {b.type === "text" ? (b.text?.slice(0, 24) || "Text") : `${b.type[0].toUpperCase()}${b.type.slice(1)}`}
                                     </span>
+                                    {b.groupId && (
+                                        <span className="label-mono text-[#3b82f6]" title="Grouped">grp</span>
+                                    )}
                                     <span className="label-mono">z{b.z}</span>
                                 </div>
                             );
@@ -403,7 +517,7 @@ export default function Editor() {
                 <div
                     ref={canvasWrapRef}
                     className="flex-1 bg-canvas canvas-grid relative overflow-hidden flex items-center justify-center"
-                    onClick={() => setSelectedBlockId(null)}
+                    onClick={clearSelection}
                 >
                     <div
                         style={{
@@ -424,45 +538,89 @@ export default function Editor() {
                             }}
                             onClick={(e) => e.stopPropagation()}
                         >
-                            {sortedBlocks.map((b) => (
+                            {sortedBlocks.map((b) => {
+                                const isSelected = selectedIds.includes(b.id);
+                                const isSingle = isSelected && selectedIds.length === 1;
+                                // When part of a multi-selection the group overlay handles drag, so
+                                // disable the individual block's drag/resize to avoid conflicts.
+                                const disableDrag = isSelected && selectedIds.length > 1;
+                                return (
+                                    <Rnd
+                                        key={b.id}
+                                        scale={scale}
+                                        bounds="parent"
+                                        position={{ x: b.x, y: b.y }}
+                                        size={{ width: b.width, height: b.height }}
+                                        disableDragging={disableDrag}
+                                        onDragStart={() => { if (!isSelected) setSelectedIds([b.id]); }}
+                                        onDragStop={(e, d) => updateBlock(b.id, { x: Math.round(d.x), y: Math.round(d.y) })}
+                                        onResizeStart={() => { if (!isSelected) setSelectedIds([b.id]); }}
+                                        onResizeStop={(e, dir, ref, delta, pos) =>
+                                            updateBlock(b.id, {
+                                                width: Math.round(parseFloat(ref.style.width)),
+                                                height: Math.round(parseFloat(ref.style.height)),
+                                                x: Math.round(pos.x),
+                                                y: Math.round(pos.y),
+                                            })
+                                        }
+                                        style={{ zIndex: b.z || 0 }}
+                                        resizeHandleClasses={{
+                                            topLeft: "rnd-handle", topRight: "rnd-handle",
+                                            bottomLeft: "rnd-handle", bottomRight: "rnd-handle",
+                                            top: "rnd-handle", left: "rnd-handle",
+                                            right: "rnd-handle", bottom: "rnd-handle",
+                                        }}
+                                        enableResizing={isSingle}
+                                    >
+                                        <div
+                                            data-testid={`canvas-block-${b.id}`}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                selectBlock(b.id, e.shiftKey);
+                                            }}
+                                            style={{
+                                                width: "100%",
+                                                height: "100%",
+                                                position: "relative",
+                                                outline: isSelected
+                                                    ? selectedIds.length > 1
+                                                        ? "2px dashed #3B82F6"
+                                                        : "2px solid #3B82F6"
+                                                    : "none",
+                                            }}
+                                        >
+                                            <BlockRenderer block={b} />
+                                        </div>
+                                    </Rnd>
+                                );
+                            })}
+
+                            {/* Group overlay: appears whenever 2+ blocks are selected, lets the user drag them as one. */}
+                            {groupBounds && (
                                 <Rnd
-                                    key={b.id}
                                     scale={scale}
                                     bounds="parent"
-                                    position={{ x: b.x, y: b.y }}
-                                    size={{ width: b.width, height: b.height }}
-                                    onDragStart={() => setSelectedBlockId(b.id)}
-                                    onDragStop={(e, d) => updateBlock(b.id, { x: Math.round(d.x), y: Math.round(d.y) })}
-                                    onResizeStart={() => setSelectedBlockId(b.id)}
-                                    onResizeStop={(e, dir, ref, delta, pos) =>
-                                        updateBlock(b.id, {
-                                            width: Math.round(parseFloat(ref.style.width)),
-                                            height: Math.round(parseFloat(ref.style.height)),
-                                            x: Math.round(pos.x),
-                                            y: Math.round(pos.y),
-                                        })
-                                    }
-                                    style={{ zIndex: b.z || 0 }}
-                                    resizeHandleClasses={{
-                                        topLeft: "rnd-handle", topRight: "rnd-handle",
-                                        bottomLeft: "rnd-handle", bottomRight: "rnd-handle",
-                                        top: "rnd-handle", left: "rnd-handle",
-                                        right: "rnd-handle", bottom: "rnd-handle",
-                                    }}
-                                    enableResizing={selectedBlockId === b.id}
+                                    position={{ x: groupBounds.x, y: groupBounds.y }}
+                                    size={{ width: groupBounds.width, height: groupBounds.height }}
+                                    enableResizing={false}
+                                    onDragStart={beginGroupDrag}
+                                    onDrag={onGroupDrag}
+                                    onDragStop={onGroupDrag}
+                                    style={{ zIndex: 99999, cursor: "move" }}
+                                    data-testid="group-overlay"
                                 >
                                     <div
-                                        data-testid={`canvas-block-${b.id}`}
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setSelectedBlockId(b.id);
+                                        onClick={(e) => e.stopPropagation()}
+                                        style={{
+                                            width: "100%",
+                                            height: "100%",
+                                            border: "2px solid #3B82F6",
+                                            background: "rgba(59,130,246,0.06)",
+                                            pointerEvents: "auto",
                                         }}
-                                        style={{ width: "100%", height: "100%", position: "relative", outline: selectedBlockId === b.id ? "2px solid #3B82F6" : "none" }}
-                                    >
-                                        <BlockRenderer block={b} />
-                                    </div>
+                                    />
                                 </Rnd>
-                            ))}
+                            )}
                         </div>
                     </div>
 
@@ -471,11 +629,36 @@ export default function Editor() {
                     <div className="absolute bottom-3 left-4 label-mono">
                         {playlist.width}×{playlist.height}
                     </div>
+                    {selectedIds.length > 1 && (
+                        <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-panel/95 border border-soft rounded-md px-2 py-1.5 flex items-center gap-1.5 backdrop-blur" data-testid="group-actionbar">
+                            <span className="label-mono px-1">{selectedIds.length} selected</span>
+                            {sharedGroupId ? (
+                                <button className="btn-ghost py-1 px-2 text-xs" onClick={ungroupSelection} data-testid="ungroup-button">
+                                    Ungroup
+                                </button>
+                            ) : (
+                                <button className="btn-primary py-1 px-2 text-xs" onClick={groupSelection} data-testid="group-button">
+                                    Group
+                                </button>
+                            )}
+                            <button className="tool-btn" onClick={deleteSelection} title="Delete selection" data-testid="delete-selection">
+                                <Trash2 size={13} />
+                            </button>
+                        </div>
+                    )}
                 </div>
 
                 {/* Right inspector */}
                 <aside className="w-72 border-l border-soft bg-panel flex flex-col shrink-0 overflow-y-auto">
-                    {!selectedBlock ? (
+                    {selectedBlocks.length > 1 ? (
+                        <MultiInspector
+                            count={selectedBlocks.length}
+                            grouped={!!sharedGroupId}
+                            onGroup={groupSelection}
+                            onUngroup={ungroupSelection}
+                            onDelete={deleteSelection}
+                        />
+                    ) : !selectedBlock ? (
                         <SlideInspector slide={slide} idx={activeSlideIdx} updateSlide={updateSlide} />
                     ) : (
                         <BlockInspector
@@ -519,8 +702,37 @@ function Section({ title, children }) {
     );
 }
 
-function SlideInspector({ slide, idx, updateSlide }) {
+function MultiInspector({ count, grouped, onGroup, onUngroup, onDelete }) {
     return (
+        <div>
+            <Section title="Selection">
+                <div className="label-mono">{count} blocks selected</div>
+                <div className="text-xs text-secondary2 leading-relaxed">
+                    Group blocks to move them as one. Shift+click on the canvas or in the layers panel to add or remove blocks from the selection.
+                </div>
+                <div className="flex flex-col gap-2 pt-1">
+                    {grouped ? (
+                        <button className="btn-ghost w-full" onClick={onUngroup} data-testid="inspector-ungroup">
+                            Ungroup
+                        </button>
+                    ) : (
+                        <button className="btn-primary w-full" onClick={onGroup} data-testid="inspector-group">
+                            Group selection
+                        </button>
+                    )}
+                    <button className="btn-ghost w-full inline-flex items-center justify-center gap-2 text-[#ef4444]" onClick={onDelete} data-testid="inspector-delete-selection">
+                        <Trash2 size={13} /> Delete all
+                    </button>
+                </div>
+            </Section>
+            <div className="p-4 text-xs text-muted2">
+                Tip: drag the dashed box on the canvas to move every block in the selection at once.
+            </div>
+        </div>
+    );
+}
+
+function SlideInspector({ slide, idx, updateSlide }) {    return (
         <div>
             <Section title="Slide">
                 <Field label="Name">

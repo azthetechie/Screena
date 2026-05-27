@@ -1,0 +1,43 @@
+{
+  "summary": "Full backend + frontend testing of new block-grouping feature. Backend groupId field round-trips correctly through PUT/GET /api/playlists/{id}; all 35 prior regression tests still pass. Frontend multi-select, Group/Ungroup, save-reload persistence, selection-by-group, group overlay, inspector-group, and keyboard shortcuts (Ctrl+G / Ctrl+Shift+G / Esc) all work as specified. Found ONE non-blocking UX bug: clicking the Group/Ungroup/Delete buttons in the floating action bar bubbles up to the canvas wrapper's onClick={clearSelection} and immediately deselects the blocks after the action completes (data is still saved correctly; just confusing UX because the action bar disappears).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "PUT /api/playlists/{id}", "issue": "Uses model_dump(exclude_none=True) so blocks with groupId=null are stored WITHOUT the groupId key (rather than with explicit null). Functionally harmless for the frontend (which treats missing/null/undefined as 'no group'), but the API does not strictly preserve the null value as sent. Tests adjusted to accept missing-key as None."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Editor.jsx group-actionbar", "issue": "Clicking [data-testid=group-button] / [data-testid=ungroup-button] / [data-testid=delete-selection] inside the floating action bar bubbles to the parent canvas wrapper's onClick={clearSelection} (line ~520). The action runs correctly (toast appears, data updates), but selectedIds is then cleared so the action bar disappears immediately, leaving the user unable to immediately perform a follow-up action (e.g. Group then immediately Ungroup). Fix: add e.stopPropagation() in the action bar buttons' onClick OR wrap the action bar in a div that stops propagation.", "selector": "[data-testid=group-actionbar] button", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Editor canvas with default new blocks", "issues": ["All three newly-added blocks default to roughly the same x/y so they overlap (clock + text + shape stack at ~(200,200)). Suggest staggering defaults (e.g. +30px per new block) to avoid pointer-event interception and improve discoverability."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_screena_grouping.py",
+    "/app/test_reports/pytest/iter3_grouping.xml",
+    "/app/test_reports/pytest/iter3_regression.xml"
+  ],
+  "action_items": [
+    "[MEDIUM] Add e.stopPropagation() to the action bar buttons (group/ungroup/delete-selection) in Editor.jsx so the action doesn't clear selection. Currently the data updates correctly but the action bar disappears immediately, breaking the multi-step UX (e.g. group then change colours via inspector).",
+    "[LOW] Stagger default x/y for newly-added blocks so they don't overlap on a fresh slide.",
+    "[LOW/cosmetic] Consider switching PUT /api/playlists serialiser to exclude_unset (or no exclude) so that explicit groupId=null is preserved verbatim in the DB."
+  ],
+  "critical_code_review_comments": [
+    "Editor.jsx is now 946 lines; consider splitting MultiInspector, group-drag helpers, and the layers panel into separate components for maintainability (file-size threshold).",
+    "groupSelection / ungroupSelection are not wrapped in useCallback while most other handlers are; minor inconsistency.",
+    "The action-bar bubble bug is a real defect — the canvas wrapper onClick={clearSelection} catches every child click that doesn't explicitly stopPropagation. The inner slide div stops propagation but the action bar (sibling of the inner slide div) does not."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_screena_grouping.py (new)"
+  ],
+  "success_rate": {"backend": "100% (41/41 tests)", "frontend": "95% (1 UX bug, functionality intact)"},
+  "test_credentials": "admin@screena.app / admin123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Created and cleaned up TEST_GROUP_PL playlist via fixture teardown. UI test created a 'Untitled Deck' playlist; not cleaned up (8 leftover playlists from this run remain in DB).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend grouping API works perfectly. Frontend grouping flow works end-to-end. The only real issue is the action-bar click bubbling to canvas onClick={clearSelection} in Editor.jsx (~line 520). Group button data-testid changes to 'ungroup-button' only when sharedGroupId is set across the current selection — but because selection is cleared on click, the toggle is never visible to a user clicking through. Workaround used in tests: reselect via layers panel after clicking Group. Test files: /app/backend/tests/test_screena_grouping.py (new, 6 tests), test_screena_api.py (24 tests), test_screena_new_features.py (11 tests).",
+  "rca of the issue": "Action-bar deselection bug RCA: in Editor.jsx the canvas wrapper div has onClick={clearSelection} (line ~520). The group-actionbar (data-testid=group-actionbar) is rendered as a sibling at line ~633 INSIDE that wrapper. The inner slide stage div at line ~539 has onClick={e=>e.stopPropagation()} to protect canvas-block interactions, but the action bar is OUTSIDE that inner stage div. So when the user clicks any button inside the action bar, the click bubbles past the action bar (no stopPropagation) and triggers clearSelection on the canvas wrapper. The button's own onClick still fires first (groupSelection/ungroupSelection), so the data update is correct — but selection is wiped right after, hiding the action bar. Mitigation: either (a) add onClick={e=>e.stopPropagation()} on the action-bar wrapper div, or (b) call e.stopPropagation() inside each button handler, or (c) move the action bar OUT of the canvas-wrapper subtree."
+}
