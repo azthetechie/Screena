@@ -1,0 +1,35 @@
+name: release-please
+
+# release-please watches commits on `main`, accumulates Conventional Commits
+# (feat:, fix:, chore!:, etc.) into a single "Release PR", and when that PR
+# is merged it:
+#   1. Bumps backend/pyproject.toml + frontend/package.json
+#   2. Regenerates each component's CHANGELOG.md
+#   3. Cuts a Git tag `v<X.Y.Z>` and creates a GitHub Release
+#
+# That tag in turn triggers `.github/workflows/release.yml`, which builds &
+# pushes the matching GHCR images. So the full flow is fully automatic:
+#
+#   Conventional Commit ➜ Release PR ➜ Merge ➜ Tag ➜ Multi-arch images on GHCR
+#
+# See https://github.com/googleapis/release-please for commit-message rules.
+
+on:
+    push:
+        branches:
+            - main
+    workflow_dispatch:
+
+permissions:
+    contents: write
+    pull-requests: write
+
+jobs:
+    release-please:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: googleapis/release-please-action@v4
+              with:
+                  token: ${{ secrets.GITHUB_TOKEN }}
+                  config-file: release-please-config.json
+                  manifest-file: .release-please-manifest.json

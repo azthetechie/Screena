@@ -101,7 +101,26 @@ FastAPI ships a live OpenAPI + Swagger UI:
 
 - **Backend**: FastAPI · Motor · MongoDB · python-pptx · open-meteo (weather)
 - **Frontend**: React 19 · react-router · react-rnd · sonner · TailwindCSS
-- **Container**: nginx (static + reverse proxy) · mongo:7
+- **Container**: nginx (static + reverse proxy) · mongo:7 · Caddy (auto-TLS)
+
+## Releasing
+
+This repo uses [**release-please**](https://github.com/googleapis/release-please) to fully automate versioning. Use [Conventional Commits](https://www.conventionalcommits.org/) on PR titles / squash-merges:
+
+| Commit prefix | Effect                          |
+| ------------- | ------------------------------- |
+| `feat: …`     | minor bump (`0.x.0`)            |
+| `fix: …`      | patch bump (`0.0.x`)            |
+| `feat!: …`    | major bump (`x.0.0`)            |
+| `chore: …`    | no version change               |
+
+Flow:
+
+1. Merge feature PRs to `main` using Conventional Commit titles.
+2. The `release-please` workflow keeps an open **Release PR** that bumps `frontend/package.json` + `backend/pyproject.toml` and regenerates `CHANGELOG.md`.
+3. Merge the Release PR → release-please cuts a `v<X.Y.Z>` tag → the `release.yml` workflow builds & pushes multi-arch images to GHCR.
+
+No manual version edits, no manual tagging.
 
 ## License
 

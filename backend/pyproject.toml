@@ -1,0 +1,7 @@
+[project]
+name = "screena-backend"
+version = "0.1.0"
+description = "Screena — digital signage CMS (FastAPI backend)"
+requires-python = ">=3.11"
+readme = "../README.md"
+license = { text = "MIT" }
