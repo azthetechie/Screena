@@ -29,6 +29,21 @@ docker compose up --build
 
 Open <http://localhost:3000> and log in with the credentials from your `.env`. Mongo, the FastAPI backend, and the React + nginx frontend all run in containers — nothing else to install.
 
+### Option 1b — Docker with automatic HTTPS (public-facing)
+
+For a public-facing install with TLS via Let's Encrypt:
+
+1. Point an A record (e.g. `signage.example.com`) at the server's public IP.
+2. Open ports `80` and `443`.
+3. Set `DOMAIN` and `ADMIN_EMAIL_FOR_TLS` (plus `JWT_SECRET`) in `.env`.
+4. Run:
+
+```bash
+docker compose -f docker-compose.https.yml up --build -d
+```
+
+Caddy will fetch the TLS cert on first boot (~30 s) and renew it automatically thereafter. The studio is then at `https://<your-domain>`.
+
 ### Option 2 — `setup.sh` (no Docker)
 
 You need Python 3.11+, Node 18+, Yarn, and a running MongoDB on `localhost:27017`.
@@ -37,18 +52,20 @@ You need Python 3.11+, Node 18+, Yarn, and a running MongoDB on `localhost:27017
 ./setup.sh
 ```
 
-The script will:
-
-1. generate a random `JWT_SECRET`
-2. write `backend/.env` and `frontend/.env` if missing
-3. install Python + Node dependencies
-4. start the backend on :8001 and the React dev server on :3000
-
-Press Ctrl+C to stop both.
-
 ### Option 3 — Manual
 
-See **[INSTALL.md](./INSTALL.md)** for full step-by-step setup, Raspberry Pi kiosk mode, and production deployment notes (gunicorn, nginx reverse-proxy with WebSocket upgrade, mongo backups, etc.).
+See **[INSTALL.md](./INSTALL.md)** for full step-by-step setup and production deployment notes.
+
+## Setting up a Raspberry Pi kiosk
+
+On a freshly-flashed Raspberry Pi OS, run one command (replace the URL with your actual public screen URL):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/<your-org>/screena/main/scripts/install-pi.sh \
+  | bash -s -- https://signage.example.com/play/A1B2C3
+```
+
+That installs `chromium-browser`, writes an autostart entry, disables screen blanking, and hides the mouse cursor. Reboot and the Pi boots straight into the player.
 
 ## API
 

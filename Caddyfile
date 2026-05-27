@@ -1,0 +1,25 @@
+# Auto-HTTPS via Let's Encrypt. Caddy renews certificates automatically.
+# Set DOMAIN and ADMIN_EMAIL_FOR_TLS in the .env file at the repo root.
+
+{
+    email {$ADMIN_EMAIL_FOR_TLS}
+}
+
+{$DOMAIN} {
+    encode zstd gzip
+
+    # Bigger uploads (PPTX, video) — match the nginx config inside the frontend container.
+    request_body {
+        max_size 32MB
+    }
+
+    # Pass everything through to the frontend container; its own nginx config
+    # already proxies /api/* (incl. the WebSocket Upgrade) to the backend.
+    reverse_proxy frontend:80
+
+    # Quiet, structured logs to stdout.
+    log {
+        output stdout
+        format console
+    }
+}

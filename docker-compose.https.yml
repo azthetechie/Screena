@@ -1,0 +1,69 @@
+# ---------------------------------------------------------------------------
+# Screena — production stack with automatic HTTPS via Caddy + Let's Encrypt.
+#
+# Prereqs:
+#   1. Point an A record (e.g. signage.example.com) at this server's public IP.
+#   2. Open ports 80 and 443 to the world.
+#   3. Set DOMAIN, ADMIN_EMAIL_FOR_TLS, JWT_SECRET in .env (see .env.example).
+#
+# Run:
+#   docker compose -f docker-compose.https.yml up --build -d
+#
+# Caddy will obtain a TLS cert on first start (takes ~30s). Studio is then
+# at https://${DOMAIN}.
+# ---------------------------------------------------------------------------
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - screena_mongo_data:/data/db
+    expose:
+      - "27017"
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      - mongo
+    environment:
+      MONGO_URL: "mongodb://mongo:27017"
+      DB_NAME: "${DB_NAME:-screena_db}"
+      # Lock CORS to your real domain in production.
+      CORS_ORIGINS: "https://${DOMAIN:?Set DOMAIN in .env}"
+      JWT_SECRET: "${JWT_SECRET:?Set JWT_SECRET in .env}"
+      ADMIN_EMAIL: "${ADMIN_EMAIL:-admin@screena.app}"
+      ADMIN_PASSWORD: "${ADMIN_PASSWORD:-admin123}"
+    expose:
+      - "8001"
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    # No host port — Caddy fronts this on 443.
+    expose:
+      - "80"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - frontend
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"  # HTTP/3
+    environment:
+      DOMAIN: "${DOMAIN}"
+      ADMIN_EMAIL_FOR_TLS: "${ADMIN_EMAIL_FOR_TLS:-admin@${DOMAIN}}"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - screena_caddy_data:/data       # certs persist here
+      - screena_caddy_config:/config
+
+volumes:
+  screena_mongo_data:
+  screena_caddy_data:
+  screena_caddy_config:
