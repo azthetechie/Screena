@@ -234,6 +234,10 @@ export default function Editor() {
     const addBlock = (type) => {
         const b = newBlock(type);
         b.z = (blocks.reduce((m, x) => Math.max(m, x.z || 0), 0) || 0) + 1;
+        // Stagger new blocks so a fresh slide doesn't stack everything at (200,200).
+        const offset = (blocks.length % 12) * 30;
+        b.x += offset;
+        b.y += offset;
         updateSlide(activeSlideIdx, (s) => ({ blocks: [...s.blocks, b] }));
         setSelectedIds([b.id]);
     };
@@ -275,21 +279,61 @@ export default function Editor() {
         toast.success("Ungrouped");
     };
 
-    // ----- Group drag (translate every selected block by the same delta) -----
-    const beginGroupDrag = () => {
+    // ----- Group drag/resize (translate/scale every selected block together) -----
+    const beginGroupTransform = () => {
+        if (!groupBounds) return;
         groupDragRef.current = {
-            snapshot: selectedBlocks.map((b) => ({ id: b.id, x: b.x, y: b.y })),
+            startBounds: { ...groupBounds },
+            snapshot: selectedBlocks.map((b) => ({
+                id: b.id,
+                x: b.x,
+                y: b.y,
+                width: b.width,
+                height: b.height,
+                fontSize: b.fontSize,
+                borderRadius: b.borderRadius,
+            })),
         };
     };
     const onGroupDrag = (_e, d) => {
         const ref = groupDragRef.current;
-        if (!ref || !groupBounds) return;
-        const dx = d.x - groupBounds.x;
-        const dy = d.y - groupBounds.y;
+        if (!ref) return;
+        const dx = d.x - ref.startBounds.x;
+        const dy = d.y - ref.startBounds.y;
         updateSlide(activeSlideIdx, (s) => ({
             blocks: s.blocks.map((b) => {
                 const snap = ref.snapshot.find((x) => x.id === b.id);
                 return snap ? { ...b, x: Math.round(snap.x + dx), y: Math.round(snap.y + dy) } : b;
+            }),
+        }));
+    };
+    const onGroupResize = (_e, _dir, refEl, _delta, pos) => {
+        const ref = groupDragRef.current;
+        if (!ref) return;
+        const newW = parseFloat(refEl.style.width);
+        const newH = parseFloat(refEl.style.height);
+        const sx = newW / Math.max(1, ref.startBounds.width);
+        const sy = newH / Math.max(1, ref.startBounds.height);
+        const startX = ref.startBounds.x;
+        const startY = ref.startBounds.y;
+        updateSlide(activeSlideIdx, (s) => ({
+            blocks: s.blocks.map((b) => {
+                const snap = ref.snapshot.find((x) => x.id === b.id);
+                if (!snap) return b;
+                const relX = snap.x - startX;
+                const relY = snap.y - startY;
+                const out = {
+                    ...b,
+                    x: Math.round(pos.x + relX * sx),
+                    y: Math.round(pos.y + relY * sy),
+                    width: Math.round(snap.width * sx),
+                    height: Math.round(snap.height * sy),
+                };
+                // Scale text size & radius proportionally (average factor) so groups look natural
+                const scaleFactor = (sx + sy) / 2;
+                if (snap.fontSize) out.fontSize = Math.max(8, Math.round(snap.fontSize * scaleFactor));
+                if (snap.borderRadius) out.borderRadius = Math.max(0, Math.round(snap.borderRadius * scaleFactor));
+                return out;
             }),
         }));
     };
@@ -595,30 +639,37 @@ export default function Editor() {
                                 );
                             })}
 
-                            {/* Group overlay: appears whenever 2+ blocks are selected, lets the user drag them as one. */}
+                            {/* Group overlay: appears whenever 2+ blocks are selected, lets the user drag/resize them as one. */}
                             {groupBounds && (
                                 <Rnd
                                     scale={scale}
                                     bounds="parent"
                                     position={{ x: groupBounds.x, y: groupBounds.y }}
                                     size={{ width: groupBounds.width, height: groupBounds.height }}
-                                    enableResizing={false}
-                                    onDragStart={beginGroupDrag}
+                                    enableResizing={true}
+                                    onDragStart={beginGroupTransform}
                                     onDrag={onGroupDrag}
                                     onDragStop={onGroupDrag}
-                                    style={{ zIndex: 99999, cursor: "move" }}
+                                    onResizeStart={beginGroupTransform}
+                                    onResize={onGroupResize}
+                                    onResizeStop={onGroupResize}
+                                    resizeHandleClasses={{
+                                        topLeft: "rnd-handle", topRight: "rnd-handle",
+                                        bottomLeft: "rnd-handle", bottomRight: "rnd-handle",
+                                        top: "rnd-handle", left: "rnd-handle",
+                                        right: "rnd-handle", bottom: "rnd-handle",
+                                    }}
+                                    style={{
+                                        zIndex: 99999,
+                                        cursor: "move",
+                                        border: "2px dashed #3B82F6",
+                                        background: "rgba(59,130,246,0.06)",
+                                    }}
                                     data-testid="group-overlay"
                                 >
-                                    <div
-                                        onClick={(e) => e.stopPropagation()}
-                                        style={{
-                                            width: "100%",
-                                            height: "100%",
-                                            border: "2px solid #3B82F6",
-                                            background: "rgba(59,130,246,0.06)",
-                                            pointerEvents: "auto",
-                                        }}
-                                    />
+                                    {/* No inner content — the Rnd wrapper itself provides
+                                        the visual outline + handles. An inner div would
+                                        cover the resize handles and break grabbing them. */}
                                 </Rnd>
                             )}
                         </div>
