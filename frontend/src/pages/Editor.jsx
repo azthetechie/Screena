@@ -630,7 +630,11 @@ export default function Editor() {
                         {playlist.width}×{playlist.height}
                     </div>
                     {selectedIds.length > 1 && (
-                        <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-panel/95 border border-soft rounded-md px-2 py-1.5 flex items-center gap-1.5 backdrop-blur" data-testid="group-actionbar">
+                        <div
+                            className="absolute top-3 left-1/2 -translate-x-1/2 bg-panel/95 border border-soft rounded-md px-2 py-1.5 flex items-center gap-1.5 backdrop-blur"
+                            data-testid="group-actionbar"
+                            onClick={(e) => e.stopPropagation()}
+                        >
                             <span className="label-mono px-1">{selectedIds.length} selected</span>
                             {sharedGroupId ? (
                                 <button className="btn-ghost py-1 px-2 text-xs" onClick={ungroupSelection} data-testid="ungroup-button">
