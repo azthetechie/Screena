@@ -104,6 +104,7 @@ export default function BlockRenderer({ block }) {
                     targetDate={block.targetDate}
                     color={block.color || "#fff"}
                     fontFamily={block.fontFamily || "Manrope"}
+                    countdownFormat={block.countdownFormat || "dhms"}
                 />
             </div>
         );

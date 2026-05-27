@@ -63,6 +63,7 @@ const newBlock = (type) => {
             targetDate: new Date(Date.now() + 7 * 86400 * 1000).toISOString().slice(0, 16),
             color: "#FFFFFF",
             fontFamily: "Manrope",
+            countdownFormat: "dhms",
         };
     if (type === "clock")
         return { ...base, width: 700, height: 240, timeFormat: "24h", color: "#FFFFFF", fontFamily: "Manrope" };
@@ -678,6 +679,24 @@ function BlockInspector({ block, updateBlock, onDelete, onDuplicate, onMoveUp, o
                 <Section title="Countdown">
                     <Field label="Target Date & Time">
                         <input type="datetime-local" className="input-field" value={(block.targetDate || "").slice(0, 16)} onChange={(e) => updateBlock({ targetDate: e.target.value })} data-testid="block-target-date" />
+                    </Field>
+                    <Field label="Format">
+                        <select
+                            className="input-field"
+                            value={block.countdownFormat || "dhms"}
+                            onChange={(e) => updateBlock({ countdownFormat: e.target.value })}
+                            data-testid="block-countdown-format"
+                        >
+                            <option value="dhms">Days · Hours · Mins · Secs</option>
+                            <option value="dhm">Days · Hours · Mins</option>
+                            <option value="dh">Days · Hours</option>
+                            <option value="d">Days only</option>
+                            <option value="hms">Hours · Mins · Secs</option>
+                            <option value="hm">Hours · Mins</option>
+                            <option value="h">Hours only</option>
+                            <option value="ms">Mins · Secs</option>
+                            <option value="s">Seconds only</option>
+                        </select>
                     </Field>
                     <Field label="Color">
                         <input type="color" className="input-field h-9 p-1" value={block.color || "#FFFFFF"} onChange={(e) => updateBlock({ color: e.target.value })} data-testid="block-countdown-color" />

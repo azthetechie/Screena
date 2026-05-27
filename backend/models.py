@@ -37,6 +37,7 @@ class Block(BaseModel):
     shape: Optional[str] = "rectangle"  # rectangle | circle
     # countdown
     targetDate: Optional[str] = None
+    countdownFormat: Optional[str] = "dhms"  # dhms | dhm | dh | d | hms | hm | h | ms | s
     # weather
     location: Optional[str] = None
     # clock
