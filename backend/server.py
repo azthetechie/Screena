@@ -16,7 +16,12 @@ from routes_pptx import router as pptx_router
 from routes_weather import router as weather_router
 from routes_assets import router as assets_router
 
-app = FastAPI(title="Screena - Digital Signage CMS")
+app = FastAPI(
+    title="Screena - Digital Signage CMS",
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
+    openapi_url="/api/openapi.json",
+)
 
 # Mount API routers (each defines /api/* prefix)
 app.include_router(auth_router)

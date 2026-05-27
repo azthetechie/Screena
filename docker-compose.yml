@@ -1,0 +1,41 @@
+# ---------------------------------------------------------------------------
+# Screena — single-command self-host.
+#   docker compose up --build
+# Studio is then at http://localhost:3000
+# ---------------------------------------------------------------------------
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - screena_mongo_data:/data/db
+    # No public port — only reachable from the backend service via the bridge network.
+    expose:
+      - "27017"
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      - mongo
+    environment:
+      MONGO_URL: "mongodb://mongo:27017"
+      DB_NAME: "${DB_NAME:-screena_db}"
+      CORS_ORIGINS: "*"
+      JWT_SECRET: "${JWT_SECRET:?Set JWT_SECRET in .env — run `openssl rand -hex 32` to generate one}"
+      ADMIN_EMAIL: "${ADMIN_EMAIL:-admin@screena.app}"
+      ADMIN_PASSWORD: "${ADMIN_PASSWORD:-admin123}"
+    expose:
+      - "8001"
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    # nginx inside the container proxies /api/* (and the websocket) to the backend service.
+
+volumes:
+  screena_mongo_data:
