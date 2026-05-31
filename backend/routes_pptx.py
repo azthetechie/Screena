@@ -1,11 +1,8 @@
 """PPTX import - parses a .pptx file into Screena slide blocks."""
 import base64
 import io
-import uuid
-from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
 from pptx import Presentation
-from pptx.util import Emu
 from pptx.enum.shapes import MSO_SHAPE_TYPE
 
 from db import db
