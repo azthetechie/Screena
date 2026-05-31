@@ -2,10 +2,6 @@ import Countdown from "@/components/widgets/Countdown";
 import Clock from "@/components/widgets/Clock";
 import Weather from "@/components/widgets/Weather";
 
-/**
- * Render the contents of a block. Used by both the editor canvas and the
- * public player. Positioning/sizing is handled by the parent container.
- */
 export default function BlockRenderer({ block }) {
     const common = {
         width: "100%",
