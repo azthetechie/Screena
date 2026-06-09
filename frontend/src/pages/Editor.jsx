@@ -9,7 +9,6 @@ import {
     Image as ImageIcon,
     Video,
     Square,
-    Circle as CircleIcon,
     Timer,
     Clock as ClockIcon,
     Cloud,
@@ -23,8 +22,6 @@ import {
     ArrowLeft,
     Layers as LayersIcon,
     Pencil,
-    Eye,
-    EyeOff,
     MonitorPlay,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -210,7 +207,6 @@ export default function Editor() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedIds, sharedGroupId, groupBounds]);
 
-    // ----- Slide ops -----
     const updateSlide = useCallback(
         (idx, mut) => {
             setPlaylist((p) => {
@@ -261,7 +257,6 @@ export default function Editor() {
         setSelectedIds([copy.id]);
     };
 
-    // ----- Grouping -----
     const groupSelection = () => {
         if (selectedIds.length < 2) return;
         const gid = crypto.randomUUID();
@@ -279,7 +274,6 @@ export default function Editor() {
         toast.success("Ungrouped");
     };
 
-    // ----- Group drag/resize (translate/scale every selected block together) -----
     const beginGroupTransform = () => {
         if (!groupBounds) return;
         groupDragRef.current = {
@@ -352,7 +346,6 @@ export default function Editor() {
         }));
     };
 
-    // ----- Slide list ops -----
     const addSlide = () => {
         const s = { id: crypto.randomUUID(), name: `Slide ${playlist.slides.length + 1}`, duration: 8, background: "#0B0D12", blocks: [], transition: "fade" };
         setPlaylist((p) => ({ ...p, slides: [...p.slides, s] }));
@@ -367,7 +360,6 @@ export default function Editor() {
         setDirty(true);
     };
 
-    // ----- Persistence -----
     const save = async () => {
         setSaving(true);
         try {
@@ -387,9 +379,6 @@ export default function Editor() {
         }
     };
 
-    // ----- Asset library opener -----
-    // The Inspector calls this with the selected block; we just remember the
-    // target then open the library modal which handles upload + selection.
     const openAssetLibrary = (blockId, kind) => {
         setLibraryTarget({ blockId, kind });
         setLibraryOpen(true);
@@ -403,7 +392,6 @@ export default function Editor() {
         setLibraryTarget(null);
     };
 
-    // ----- Slide thumbnail drag-reorder -----
     const moveSlide = (from, to) => {
         if (from === to || from < 0 || to < 0) return;
         setPlaylist((p) => {
